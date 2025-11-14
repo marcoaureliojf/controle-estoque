@@ -21,8 +21,7 @@ switch ($_SERVER['REQUEST_METHOD']) {
     case 'GET':
         if ($id) {
             // Detalhar produto
-            // slq_assoc($query,$unico=false,$basefixa=false)
-            $produto = slq_assoc("SELECT id, descricao, codbarras, minimo FROM produtos WHERE id = $id", true); // Passando 'true' para retornar apenas o registro
+            $produto = slq_assoc("SELECT id, descricao, codbarras, minimo FROM produtos WHERE id = $id", true);
             if ($produto) {
                 response($produto);
             } else {
@@ -41,20 +40,21 @@ switch ($_SERVER['REQUEST_METHOD']) {
             response(['error' => 'Campos obrigatórios: descricao, codbarras, minimo'], 400);
         }
         
-        // Uso da função a($str) de funcoes.php para sanitização e formatação SQL
         $descricao = a($data['descricao']);
         $codbarras = a($data['codbarras']);
-        $minimo = intval($data['minimo']); // intval não precisa de a(), mas $minimo deve ser verificado se é válido.
+        $minimo = intval($data['minimo']);
 
-        // Gerando o INSERT (a função a() já adicionou as aspas simples)
+        // Melhoria: Validação para garantir que 'minimo' não seja negativo (pois é UNSIGNED)
+        if ($minimo < 0) {
+            response(['error' => 'O campo mínimo de estoque não pode ser negativo.'], 400);
+        }
+
         $sql = "INSERT INTO produtos (descricao, codbarras, minimo) VALUES ($descricao, $codbarras, $minimo)";
         
-        // CORREÇÃO: Usar sql_insert() que executa o INSERT e trata erros
-        $insert_id = sql_insert($sql, false); // Ocultar o erro no JSON response
+        $insert_id = sql_insert($sql, false); 
         
         if ($insert_id !== false) {
-            // Retorna o ID inserido como confirmação
-            response(['success' => 'Produto cadastrado com sucesso', 'id' => $insert_id], 201); // 201 Created
+            response(['success' => 'Produto cadastrado com sucesso', 'id' => $insert_id], 201); 
         } else {
             response(['error' => 'Erro ao cadastrar produto. Possível duplicidade ou falha de banco.'], 500);
         }
@@ -67,10 +67,17 @@ switch ($_SERVER['REQUEST_METHOD']) {
         $data = getRequestData();
         $campos = [];
 
-        // Uso da função a($str) de funcoes.php para sanitização e formatação SQL
         if (isset($data['descricao'])) $campos[] = "descricao=" . a($data['descricao']);
         if (isset($data['codbarras'])) $campos[] = "codbarras=" . a($data['codbarras']);
-        if (isset($data['minimo'])) $campos[] = "minimo=" . intval($data['minimo']); // intval é suficiente para números
+        
+        if (isset($data['minimo'])) {
+            $minimo = intval($data['minimo']);
+            // Melhoria: Validação para 'minimo'
+            if ($minimo < 0) {
+                response(['error' => 'O campo mínimo de estoque não pode ser negativo.'], 400);
+            }
+            $campos[] = "minimo=" . $minimo;
+        }
 
         if (empty($campos)) {
             response(['error' => 'Nenhum campo para atualizar'], 400);
@@ -78,9 +85,6 @@ switch ($_SERVER['REQUEST_METHOD']) {
         
         $sql = "UPDATE produtos SET " . implode(', ', $campos) . " WHERE id=$id";
         
-        // CORREÇÃO: Usar play_sql() ou atualizar_banco() para executar o UPDATE
-        // A função atualizar_banco($tabela,$assoc,$filtro,$dbg=false) seria a mais robusta,
-        // mas dado o formato atual, play_sql() é mais direto.
         if (play_sql($sql)) {
             response(['success' => 'Produto atualizado com sucesso']);
         } else {
@@ -95,7 +99,6 @@ switch ($_SERVER['REQUEST_METHOD']) {
         
         $sql = "DELETE FROM produtos WHERE id=$id";
         
-        // CORREÇÃO: Usar delete_sql() que executa o DELETE
         $linhas_excluidas = delete_sql($sql);
         
         if ($linhas_excluidas > 0) {
